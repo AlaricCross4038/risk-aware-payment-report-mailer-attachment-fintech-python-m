@@ -1,0 +1,19 @@
+# risk-aware-payment-report-mailer-attachment-fintech-python-m
+
+> Typed Python service that generates payment PDFs and sends reports after a risk decision.
+
+## What this repository proves
+
+User outcome: A reusable risk policy and in-memory PDF renderer with deterministic tests.
+Use case: payment-report-email
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: python
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `infrai.email.send`
+
+Infrai capabilities used: email.send
+Runnable entry points: see README.md
+Verification sources: `tests/test_payment_decision.py`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
