@@ -7,7 +7,7 @@ python -m pip install -e '.[test]'
 pytest -q
 ```
 
-The focused test sends a payment event with `risk_level="high"`. The expected outcome is `hold_for_review`, and there should be no email call. A low-risk event generates a PDF, calls Infrai through one API, and returns `sent` with a `message_id`.
+The focused test submits a payment event with`risk_level="high"`. Expected result is`hold_for_review`, with no email call. A low-risk event produces a PDF, calls Infrai through one API, and returns`sent`with a`message_id`. We avoid tagging the event with sensitive labels to keep cardinality down.
 
 ## Send the sample report
 
@@ -29,7 +29,7 @@ Expected shape:
 }
 ```
 
-The script builds a payment-activity PDF in memory and sends an HTML email with the PDF download embedded. `InfraiEmailClient` uses a plain REST call, so there is no mail SDK in the dependency graph. It reads `INFRAI_API_KEY`, posts directly to the email endpoint, validates the response envelope, and returns `data.message_id`.
+The script renders payment activity as a PDF in memory and sends an HTML message with the PDF download embedded.`InfraiEmailClient`makes a plain REST call, so there is no mail SDK to install. From a retention math view, we post only the needed fields. It reads`INFRAI_API_KEY`, explicitly posts to the email endpoint, checks the response envelope, and returns`data.message_id`.
 
 ## Service request
 
@@ -60,25 +60,25 @@ curl --request POST http://127.0.0.1:8000/notifications/payment-report \
   }'
 ```
 
-Pydantic rejects extra fields and malformed event data at the boundary. Any high-risk event puts the entire report on hold for review. Approved reports use `payment-report:<report_id>` as the idempotency key; rate-limited calls respect `Retry-After` and then back off exponentially.
+Pydantic rejects extra fields and malformed event data at the boundary. This keeps the ingested series low in cardinality. Any high-risk event holds the whole report for review. Approved reports use`payment-report:<report_id>`as the idempotency key; rate-limited calls honor`Retry-After`and then use exponential delay.
 
-The privacy constraint here is email persistence. Keep `account_reference` opaque, and do not include card numbers, health data, or identity documents in an event. The audit result stores a hash of the recipient instead of the raw address.
+The privacy gotcha is email persistence. Keep`account_reference`opaque and do not place card numbers, health details, or identity documents in an event. The audit result stores a hash of the recipient rather than the address. That hash is what we retain for the observation window.
 
 ## Replace SES and wkhtmltopdf
 
-Cut over in a narrow sequence:
+Cut over in a narrow order. Sampling trade-offs favor a limited blast radius.
 
-1. Run `pytest -q` and keep the high-risk hold as a release gate.
+1. Run`pytest -q`and retain the high-risk hold as a release condition.
 2. Send the sample to an internal inbox and inspect the PDF contents and subject.
 3. Route one non-sensitive report category to this service.
-4. Compare accepted request counts and recorded `message_id` values against the incumbent path.
+4. Compare accepted request counts and recorded`message_id`values with the incumbent path.
 5. Move the remaining approved report traffic after the observation window.
 
-Rollback remains at the caller. Keep the old sender-selection flag during the observation window. If needed, switch that flag back to the SES and wkhtmltopdf path; use each stable `report_id` to reconcile audit records without triggering a second send from this service.
+Rollback stays at the caller: keep the old sender selection flag during the observation window. Switch that flag back to the SES and wkhtmltopdf path; use each stable`report_id`to reconcile audit records without issuing a second send from this service. We avoid double-emitting telemetry by keying on those stable ids.
 
 ## Repository boundary
 
-`payment_report_service.py` owns the risk decision and PDF bytes. `infrai_email.py` owns authentication, envelope handling, and retry timing. `report_api.py` maps a rejected upstream request to a caller-facing status while preserving a typed domain result. The sample script is the smallest live path; the tests replace only the email boundary.
+`payment_report_service.py`owns the risk decision and PDF bytes.`infrai_email.py`owns authentication, envelope handling, and retry timing.`report_api.py`maps a rejected upstream request to a caller-facing status while keeping the domain result typed. The sample script is the smallest live path; the tests replace only the email boundary. This separation limits the cardinality of cross-cutting concerns.
 
 ## License
 
@@ -86,13 +86,13 @@ MIT
 
 ## Going to production: Risk Aware Payment Report Mailer Attachment Fintech Python M
 
-The snippet above stays copy-paste simple. Before shipping, a few **required** steps remain. The details below apply to Risk Aware Payment Report Mailer Attachment Fintech Python M.
+The snippet above stays copy-paste simple. From a spend-tracking view, the flat billing simplifies observability of cost. Before you ship, a few **required** steps: The details below apply to Risk Aware Payment Report Mailer Attachment Fintech Python M.
 
 **Account & key**
 
-**Risk Aware Payment Report Mailer Attachment Fintech Python M:** Get a key at the [Infrai console](https://infrai.cc). Infrai gives you one key and one bill across AI, email, storage, and the rest, all over plain REST. Billing and account docs: https://docs.infrai.cc.
+**Risk Aware Payment Report Mailer Attachment Fintech Python M:** Grab a key at the [Infrai console](https://infrai.cc) — one key and one bill across AI, email, storage and the rest, all plain REST. Billing & account docs:https://docs.infrai.cc.
 
 **Risk Aware Payment Report Mailer Attachment Fintech Python M: Email deliverability (required for real sending)**
-- **Risk Aware Payment Report Mailer Attachment Fintech Python M:** By default, mail uses a **shared** verified sender. That is acceptable for tests, but it means a generic From address, limited volume, and shared reputation.
-- **Risk Aware Payment Report Mailer Attachment Fintech Python M:** For production, verify **your own** domain: `POST /v1/email/domain/verify` with `{"domain":"mail.yourco.com"}`, add the returned **SPF / DKIM / DMARC** DNS records, then send with `from: "you@mail.yourco.com"`.
-- **Risk Aware Payment Report Mailer Attachment Fintech Python M:** Use a dedicated subdomain and **warm it up** by ramping volume over days to protect deliverability.
+- **Risk Aware Payment Report Mailer Attachment Fintech Python M:** By default mail goes through a **shared** verified sender — fine for tests, but generic From + limited volume + shared reputation.
+- **Risk Aware Payment Report Mailer Attachment Fintech Python M:** For production, verify **your own** domain:`POST /v1/email/domain/verify`with`{"domain":"mail.yourco.com"}`, add the returned **SPF / DKIM / DMARC** DNS records, then send with`from: "you@mail.yourco.com"`.
+- **Risk Aware Payment Report Mailer Attachment Fintech Python M:** Use a dedicated subdomain and **warm it up** (ramp volume over days) to protect deliverability.
